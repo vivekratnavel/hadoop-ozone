@@ -19,8 +19,6 @@ package org.apache.hadoop.hdds.scm.command;
 
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.hdds.protocol.proto
-    .StorageContainerDatanodeProtocolProtos.SCMCommandProto;
-import org.apache.hadoop.hdds.protocol.proto
     .StorageContainerDatanodeProtocolProtos.CommandStatus;
 import org.apache.hadoop.hdds.scm.events.SCMEvents;
 import org.apache.hadoop.hdds.scm.server.SCMDatanodeHeartbeatDispatcher
@@ -55,13 +53,21 @@ public class CommandStatusReportHandler implements
     cmdStatusList.forEach(cmdStatus -> {
       LOGGER.trace("Emitting command status for id:{} type: {}", cmdStatus
           .getCmdId(), cmdStatus.getType());
-      if (cmdStatus.getType() == SCMCommandProto.Type.deleteBlocksCommand) {
+      switch (cmdStatus.getType()) {
+      case deleteBlocksCommand:
         if (cmdStatus.getStatus() == CommandStatus.Status.EXECUTED) {
           publisher.fireEvent(SCMEvents.DELETE_BLOCK_STATUS,
               new DeleteBlockStatus(cmdStatus));
         }
-      } else {
-        LOGGER.debug("CommandStatus of type:{} not handled in " +
+        break;
+      case createPipelineCommand:
+        if (cmdStatus.getStatus() != CommandStatus.Status.PENDING) {
+          publisher.fireEvent(SCMEvents.CREATE_PIPELINE_STATUS,
+              new CreatePipelineStatus(cmdStatus));
+        }
+        break;
+      default:
+        LOGGER.warn("CommandStatus of type:{} not handled in " +
             "CommandStatusReportHandler.", cmdStatus.getType());
       }
     });
@@ -101,4 +107,12 @@ public class CommandStatusReportHandler implements
     }
   }
 
+  /**
+   * Wrapper event for CreatePipeline Command Status.
+   */
+  public static class CreatePipelineStatus extends CommandStatusEvent {
+    public CreatePipelineStatus(CommandStatus cmdStatus) {
+      super(cmdStatus);
+    }
+  }
 }

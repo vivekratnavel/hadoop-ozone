@@ -24,8 +24,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import javax.management.ObjectName;
+
+import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.StorageUnit;
+import org.apache.hadoop.hdds.HddsConfigKeys;
 import org.apache.hadoop.hdds.client.BlockID;
 import org.apache.hadoop.hdds.client.ContainerBlockID;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
@@ -79,6 +82,7 @@ public class BlockManagerImpl implements BlockManager, BlockmanagerMXBean {
 
   private ObjectName mxBean;
   private SafeModePrecheck safeModePrecheck;
+  private final long pipelineCreateWaitTimeout;
 
   /**
    * Constructor.
@@ -117,6 +121,22 @@ public class BlockManagerImpl implements BlockManager, BlockmanagerMXBean {
             scm.getScmNodeManager(), scm.getEventQueue(), svcInterval,
             serviceTimeout, conf);
     safeModePrecheck = new SafeModePrecheck(conf);
+
+    long heartbeatInterval =  conf.getTimeDuration(
+        HddsConfigKeys.HDDS_HEARTBEAT_INTERVAL,
+        HddsConfigKeys.HDDS_HEARTBEAT_INTERVAL_DEFAULT,
+        TimeUnit.MILLISECONDS);
+
+    long commandStatusReportInterval =  conf.getTimeDuration(
+        HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL,
+        HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL_DEFAULT,
+        TimeUnit.MILLISECONDS);
+
+    Preconditions.checkState(heartbeatInterval <= commandStatusReportInterval,
+        "Heartbeat interval is smaller than command status report interval");
+    pipelineCreateWaitTimeout =
+        ((commandStatusReportInterval + heartbeatInterval - 1)
+            / heartbeatInterval) * heartbeatInterval + 5000L;
   }
 
   /**
@@ -188,6 +208,15 @@ public class BlockManagerImpl implements BlockManager, BlockmanagerMXBean {
           // TODO: #CLUTIL Remove creation logic when all replication types and
           // factors are handled by pipeline creator
           pipeline = pipelineManager.createPipeline(type, factor);
+          // wait until pipeline is ready
+          long current = System.currentTimeMillis();
+          while (!pipeline.isOpen() && System.currentTimeMillis() <
+              (current + pipelineCreateWaitTimeout)) {
+            try {
+              Thread.sleep(1000);
+            } catch (InterruptedException e) {
+            }
+          }
         } catch (IOException e) {
           LOG.warn("Pipeline creation failed for type:{} factor:{}. Retrying " +
                   "get pipelines call once.", type, factor, e);

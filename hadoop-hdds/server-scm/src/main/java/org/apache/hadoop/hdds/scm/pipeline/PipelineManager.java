@@ -21,8 +21,9 @@ package org.apache.hadoop.hdds.scm.pipeline;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationType;
+import org.apache.hadoop.hdds.scm.command.CommandStatusReportHandler;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
-import org.apache.ratis.grpc.GrpcTlsConfig;
+import org.apache.hadoop.hdds.server.events.EventHandler;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -33,7 +34,8 @@ import java.util.NavigableSet;
 /**
  * Interface which exposes the api for pipeline management.
  */
-public interface PipelineManager extends Closeable, PipelineManagerMXBean {
+public interface PipelineManager extends Closeable, PipelineManagerMXBean,
+    EventHandler<CommandStatusReportHandler.CreatePipelineStatus> {
 
   Pipeline createPipeline(ReplicationType type, ReplicationFactor factor)
       throws IOException;
@@ -49,6 +51,9 @@ public interface PipelineManager extends Closeable, PipelineManagerMXBean {
 
   List<Pipeline> getPipelines(ReplicationType type,
       ReplicationFactor factor);
+
+  List<Pipeline> getPipelines(ReplicationType type,
+      Pipeline.PipelineState state);
 
   List<Pipeline> getPipelines(ReplicationType type,
       ReplicationFactor factor, Pipeline.PipelineState state);
@@ -94,6 +99,4 @@ public interface PipelineManager extends Closeable, PipelineManagerMXBean {
    * @throws IOException in case of any Exception
    */
   void deactivatePipeline(PipelineID pipelineID) throws IOException;
-
-  GrpcTlsConfig getGrpcTlsConfig();
 }

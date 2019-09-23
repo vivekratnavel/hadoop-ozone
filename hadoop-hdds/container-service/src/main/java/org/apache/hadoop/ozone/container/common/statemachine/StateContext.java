@@ -37,6 +37,8 @@ import org.apache.hadoop.ozone.container.common.states.datanode
 import org.apache.hadoop.ozone.protocol.commands.CommandStatus;
 import org.apache.hadoop.ozone.protocol.commands
     .DeleteBlockCommandStatus.DeleteBlockCommandStatusBuilder;
+import org.apache.hadoop.ozone.protocol.commands
+    .CreatePipelineCommandStatus.CreatePipelineCommandStatusBuilder;
 import org.apache.hadoop.ozone.protocol.commands.SCMCommand;
 
 import static java.lang.Math.min;
@@ -459,6 +461,14 @@ public class StateContext {
     if (cmd.getType() == SCMCommandProto.Type.deleteBlocksCommand) {
       addCmdStatus(cmd.getId(),
           DeleteBlockCommandStatusBuilder.newBuilder()
+              .setCmdId(cmd.getId())
+              .setStatus(Status.PENDING)
+              .setType(cmd.getType())
+              .build());
+    }
+    if (cmd.getType() == SCMCommandProto.Type.createPipelineCommand) {
+      addCmdStatus(cmd.getId(),
+          CreatePipelineCommandStatusBuilder.newBuilder()
               .setCmdId(cmd.getId())
               .setStatus(Status.PENDING)
               .setType(cmd.getType())

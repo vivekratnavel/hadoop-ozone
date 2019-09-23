@@ -21,23 +21,30 @@ package org.apache.hadoop.hdds.scm.pipeline;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdds.HddsConfigKeys;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationType;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
+import org.apache.hadoop.hdds.protocol.proto
+    .StorageContainerDatanodeProtocolProtos.CreatePipelineACKProto;
+import org.apache.hadoop.hdds.protocol.proto
+    .StorageContainerDatanodeProtocolProtos.CommandStatus;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.events.SCMEvents;
 import org.apache.hadoop.hdds.scm.node.NodeManager;
+import org.apache.hadoop.hdds.scm.server.StorageContainerManager;
 import org.apache.hadoop.hdds.server.ServerUtils;
 import org.apache.hadoop.hdds.server.events.EventPublisher;
+import org.apache.hadoop.hdds.scm.command.CommandStatusReportHandler
+    .CreatePipelineStatus;
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.hdds.utils.MetadataKeyFilters;
 import org.apache.hadoop.hdds.utils.MetadataStore;
 import org.apache.hadoop.hdds.utils.MetadataStoreBuilder;
 import org.apache.hadoop.hdds.utils.Scheduler;
-import org.apache.ratis.grpc.GrpcTlsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,18 +88,20 @@ public class SCMPipelineManager implements PipelineManager {
   private final NodeManager nodeManager;
   private final SCMPipelineMetrics metrics;
   private final Configuration conf;
+  private final StorageContainerManager scm;
+  private boolean pipelineAvailabilityCheck;
+  private boolean createPipelineInSafemode;
   // Pipeline Manager MXBean
   private ObjectName pmInfoBean;
-  private GrpcTlsConfig grpcTlsConfig;
 
   public SCMPipelineManager(Configuration conf, NodeManager nodeManager,
-      EventPublisher eventPublisher, GrpcTlsConfig grpcTlsConfig)
+      EventPublisher eventPublisher, StorageContainerManager scm)
       throws IOException {
     this.lock = new ReentrantReadWriteLock();
     this.conf = conf;
     this.stateManager = new PipelineStateManager(conf);
     this.pipelineFactory = new PipelineFactory(nodeManager, stateManager,
-        conf, grpcTlsConfig);
+        conf, eventPublisher);
     // TODO: See if thread priority needs to be set for these threads
     scheduler = new Scheduler("RatisPipelineUtilsThread", false, 1);
     this.backgroundPipelineCreator =
@@ -113,8 +122,14 @@ public class SCMPipelineManager implements PipelineManager {
     this.metrics = SCMPipelineMetrics.create();
     this.pmInfoBean = MBeans.register("SCMPipelineManager",
         "SCMPipelineManagerInfo", this);
+    this.scm = scm;
+    this.pipelineAvailabilityCheck = conf.getBoolean(
+        HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_AVAILABILITY_CHECK,
+        HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_AVAILABILITY_CHECK_DEFAULT);
+    this.createPipelineInSafemode = conf.getBoolean(
+        HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_CREATION,
+        HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_CREATION_DEFAULT);
     initializePipelineState();
-    this.grpcTlsConfig = grpcTlsConfig;
   }
 
   public PipelineStateManager getStateManager() {
@@ -130,6 +145,9 @@ public class SCMPipelineManager implements PipelineManager {
   private void initializePipelineState() throws IOException {
     if (pipelineStore.isEmpty()) {
       LOG.info("No pipeline exists in current db");
+      if (pipelineAvailabilityCheck && createPipelineInSafemode) {
+        startPipelineCreator();
+      }
       return;
     }
     List<Map.Entry<byte[], byte[]>> pipelines =
@@ -148,8 +166,8 @@ public class SCMPipelineManager implements PipelineManager {
   }
 
   @Override
-  public synchronized Pipeline createPipeline(
-      ReplicationType type, ReplicationFactor factor) throws IOException {
+  public synchronized Pipeline createPipeline(ReplicationType type,
+      ReplicationFactor factor) throws IOException {
     lock.writeLock().lock();
     try {
       Pipeline pipeline = pipelineFactory.create(type, factor);
@@ -157,8 +175,11 @@ public class SCMPipelineManager implements PipelineManager {
           pipeline.getProtobufMessage().toByteArray());
       stateManager.addPipeline(pipeline);
       nodeManager.addPipeline(pipeline);
-      metrics.incNumPipelineCreated();
-      metrics.createPerPipelineMetrics(pipeline);
+      metrics.incNumPipelineAllocated();
+      if (pipeline.isOpen()) {
+        metrics.incNumPipelineCreated();
+        metrics.createPerPipelineMetrics(pipeline);
+      }
       return pipeline;
     } catch (InsufficientDatanodesException idEx) {
       throw idEx;
@@ -220,6 +241,16 @@ public class SCMPipelineManager implements PipelineManager {
     lock.readLock().lock();
     try {
       return stateManager.getPipelines(type, factor);
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
+
+  public List<Pipeline> getPipelines(ReplicationType type,
+      Pipeline.PipelineState state) {
+    lock.readLock().lock();
+    try {
+      return stateManager.getPipelines(type, state);
     } finally {
       lock.readLock().unlock();
     }
@@ -293,7 +324,9 @@ public class SCMPipelineManager implements PipelineManager {
     lock.writeLock().lock();
     try {
       Pipeline pipeline = stateManager.openPipeline(pipelineId);
-      metrics.createPerPipelineMetrics(pipeline);
+      if (pipelineAvailabilityCheck && scm != null && scm.isInSafeMode()) {
+        eventPublisher.fireEvent(SCMEvents.OPEN_PIPELINE, pipeline);
+      }
     } finally {
       lock.writeLock().unlock();
     }
@@ -408,7 +441,7 @@ public class SCMPipelineManager implements PipelineManager {
    * @throws IOException
    */
   private void destroyPipeline(Pipeline pipeline) throws IOException {
-    RatisPipelineUtils.destroyPipeline(pipeline, conf, grpcTlsConfig);
+    pipelineFactory.close(pipeline.getType(), pipeline);
     // remove the pipeline from the pipeline manager
     removePipeline(pipeline.getId());
     triggerPipelineCreation();
@@ -441,11 +474,6 @@ public class SCMPipelineManager implements PipelineManager {
   }
 
   @Override
-  public GrpcTlsConfig getGrpcTlsConfig() {
-    return grpcTlsConfig;
-  }
-
-  @Override
   public void close() throws IOException {
     if (scheduler != null) {
       scheduler.close();
@@ -465,5 +493,64 @@ public class SCMPipelineManager implements PipelineManager {
     }
     // shutdown pipeline provider.
     pipelineFactory.shutdown();
+  }
+
+  @Override
+  public void onMessage(CreatePipelineStatus response,
+      EventPublisher publisher) {
+    CommandStatus result = response.getCmdStatus();
+    CreatePipelineACKProto ack = result.getCreatePipelineAck();
+    PipelineID pipelineID = PipelineID.getFromProtobuf(ack.getPipelineID());
+    CommandStatus.Status status = result.getStatus();
+    LOG.info("receive pipeline {} create status {}", pipelineID, status);
+    Pipeline pipeline;
+    try {
+      pipeline = stateManager.getPipeline(pipelineID);
+    } catch (PipelineNotFoundException e) {
+      LOG.warn("Pipeline {} cannot be found", pipelineID);
+      return;
+    }
+
+    switch (status) {
+    case EXECUTED:
+      DatanodeDetails dn = nodeManager.getNodeByUuid(ack.getDatanodeUUID());
+      if (dn == null) {
+        LOG.warn("Datanode {} for Pipeline {} cannot be found",
+            ack.getDatanodeUUID(), pipelineID);
+        return;
+      }
+      try {
+        pipeline.reportDatanode(dn);
+      } catch (IOException e) {
+        LOG.warn("Update {} for Pipeline {} failed for {}",
+            dn.getUuidString(), pipelineID, e.getMessage());
+        return;
+      }
+      // If all datanodes are updated, we believe pipeline is ready to OPEN
+      if (pipeline.isHealthy() ||
+          pipeline.getPipelineState() == Pipeline.PipelineState.ALLOCATED) {
+        try {
+          openPipeline(pipelineID);
+        } catch (IOException e) {
+          LOG.warn("Fail to open Pipeline {} for {}", pipelineID,
+              e.getMessage());
+          return;
+        }
+        metrics.incNumPipelineCreated();
+        metrics.createPerPipelineMetrics(pipeline);
+      }
+      return;
+    case FAILED:
+      metrics.incNumPipelineCreationFailed();
+      try {
+        finalizeAndDestroyPipeline(pipeline, false);
+      } catch (IOException e) {
+        LOG.warn("Fail to close Pipeline {} for {}", pipelineID,
+            e.getMessage());
+      }
+      return;
+    default:
+      LOG.error("Unknown or unexpected status {}", status);
+    }
   }
 }

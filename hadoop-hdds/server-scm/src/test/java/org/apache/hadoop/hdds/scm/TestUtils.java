@@ -33,7 +33,9 @@ import org.apache.hadoop.hdds.protocol.proto
         .StorageContainerDatanodeProtocolProtos.PipelineReportsProto;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerReplica;
+import org.apache.hadoop.hdds.scm.pipeline.Pipeline;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineID;
+import org.apache.hadoop.hdds.scm.pipeline.PipelineManager;
 import org.apache.hadoop.hdds.scm.server.SCMConfigurator;
 import org.apache.hadoop.hdds.scm.server
     .SCMDatanodeHeartbeatDispatcher.PipelineActionsFromDatanode;
@@ -41,6 +43,12 @@ import org.apache.hadoop.hdds.scm.server
     .SCMDatanodeHeartbeatDispatcher.PipelineReportFromDatanode;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerManager;
+import org.apache.hadoop.hdds.scm.command.CommandStatusReportHandler
+    .CreatePipelineStatus;
+import org.apache.hadoop.hdds.protocol.proto.
+    StorageContainerDatanodeProtocolProtos.CreatePipelineACKProto;
+import org.apache.hadoop.hdds.protocol.proto.
+    StorageContainerDatanodeProtocolProtos.SCMCommandProto.Type;
 
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto
@@ -358,6 +366,32 @@ public final class TestUtils {
           PipelineReport.newBuilder().setPipelineID(pipelineID.getProtobuf()));
     }
     return new PipelineReportFromDatanode(dn, reportBuilder.build());
+  }
+
+  public static CreatePipelineStatus getPipelineCreateStatusFromDatanode(
+      DatanodeDetails dn, PipelineID pipelineID) {
+    CreatePipelineACKProto ack = CreatePipelineACKProto.newBuilder()
+        .setPipelineID(pipelineID.getProtobuf())
+        .setDatanodeUUID(dn.getUuidString())
+        .build();
+    CommandStatus status = CommandStatus.newBuilder()
+        .setCreatePipelineAck(ack)
+        .setStatus(CommandStatus.Status.EXECUTED)
+        .setCmdId(0L)
+        .setType(Type.createPipelineCommand)
+        .build();
+    return new CreatePipelineStatus(status);
+  }
+
+  public static void openAllRatisPipelines(PipelineManager pipelineManager)
+      throws IOException {
+    // Pipeline is created by background thread
+    List<Pipeline> pipelines =
+        pipelineManager.getPipelines(HddsProtos.ReplicationType.RATIS);
+    // Trigger the processed pipeline report event
+    for (Pipeline pipeline : pipelines) {
+      pipelineManager.openPipeline(pipeline.getId());
+    }
   }
 
   public static PipelineActionsFromDatanode getPipelineActionFromDatanode(
