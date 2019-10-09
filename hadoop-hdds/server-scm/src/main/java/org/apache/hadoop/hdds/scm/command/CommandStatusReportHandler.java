@@ -60,12 +60,6 @@ public class CommandStatusReportHandler implements
               new DeleteBlockStatus(cmdStatus));
         }
         break;
-      case createPipelineCommand:
-        if (cmdStatus.getStatus() != CommandStatus.Status.PENDING) {
-          publisher.fireEvent(SCMEvents.CREATE_PIPELINE_STATUS,
-              new CreatePipelineStatus(cmdStatus));
-        }
-        break;
       default:
         LOGGER.warn("CommandStatus of type:{} not handled in " +
             "CommandStatusReportHandler.", cmdStatus.getType());

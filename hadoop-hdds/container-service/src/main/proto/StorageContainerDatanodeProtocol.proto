@@ -177,7 +177,6 @@ message CommandStatus {
   required SCMCommandProto.Type type = 3;
   optional string msg = 4;
   optional ContainerBlocksDeletionACKProto blockDeletionAck = 5;
-  optional CreatePipelineACKProto createPipelineAck = 6;
 }
 
 message ContainerActionsProto {
@@ -333,13 +332,6 @@ message CreatePipelineCommandProto {
   required ReplicationFactor factor = 3;
   repeated DatanodeDetailsProto datanode = 4;
   required int64 cmdId = 5;
-}
-
-// ACK message datanode sent to SCM, contains the result of
-// pipeline creation status.
-message CreatePipelineACKProto {
-  required PipelineID pipelineID = 1;
-  required string datanodeUUID = 2;
 }
 
 /**

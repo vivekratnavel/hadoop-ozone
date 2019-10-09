@@ -16,33 +16,21 @@
  */
 package org.apache.hadoop.ozone.container.common.statemachine.commandhandler;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.
     StorageContainerDatanodeProtocolProtos.ClosePipelineCommandProto;
 import org.apache.hadoop.hdds.protocol.proto.
     StorageContainerDatanodeProtocolProtos.SCMCommandProto;
-import org.apache.hadoop.hdds.ratis.RatisHelper;
-import org.apache.hadoop.hdds.scm.ScmConfigKeys;
-import org.apache.hadoop.hdds.scm.client.HddsClientUtils;
-import org.apache.hadoop.hdds.scm.pipeline.PipelineID;
-import org.apache.hadoop.hdds.security.x509.SecurityConfig;
-import org.apache.hadoop.hdds.security.x509.certificate.client
-    .CertificateClient;
 import org.apache.hadoop.ozone.container.common.statemachine
     .SCMConnectionManager;
 import org.apache.hadoop.ozone.container.common.statemachine.StateContext;
+import org.apache.hadoop.ozone.container.common.transport.server
+    .XceiverServerSpi;
 import org.apache.hadoop.ozone.container.ozoneimpl.OzoneContainer;
 import org.apache.hadoop.ozone.protocol.commands.ClosePipelineCommand;
 import org.apache.hadoop.ozone.protocol.commands.SCMCommand;
 import org.apache.hadoop.util.Time;
-import org.apache.ratis.client.RaftClient;
-import org.apache.ratis.grpc.GrpcTlsConfig;
-import org.apache.ratis.protocol.RaftGroupId;
-import org.apache.ratis.protocol.RaftPeer;
-import org.apache.ratis.retry.RetryPolicy;
-import org.apache.ratis.rpc.SupportedRpcType;
-import org.apache.ratis.util.TimeDuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,24 +67,23 @@ public class ClosePipelineCommandHandler implements CommandHandler {
       StateContext context, SCMConnectionManager connectionManager) {
     invocationCount.incrementAndGet();
     final long startTime = Time.monotonicNow();
-    final DatanodeDetails datanode = context.getParent()
-        .getDatanodeDetails();
+    final DatanodeDetails dn = context.getParent().getDatanodeDetails();
     final ClosePipelineCommandProto closeCommand =
         ((ClosePipelineCommand)command).getProto();
-    final PipelineID pipelineID = PipelineID.getFromProtobuf(
-        closeCommand.getPipelineID());
+    final HddsProtos.PipelineID pipelineID = closeCommand.getPipelineID();
 
     try {
-      destroyPipeline(datanode, pipelineID, context);
+      XceiverServerSpi server = ozoneContainer.getWriteChannel();
+      server.removeGroup(pipelineID);
+      context.getParent().triggerHeartbeat();
       LOG.info("Close Pipeline #{} command on datanode #{}.", pipelineID,
-          datanode.getUuidString());
+          dn.getUuidString());
     } catch (IOException e) {
       LOG.error("Can't close pipeline #{}", pipelineID, e);
     } finally {
       long endTime = Time.monotonicNow();
       totalTime += endTime - startTime;
     }
-
   }
 
   /**
@@ -130,37 +117,5 @@ public class ClosePipelineCommandHandler implements CommandHandler {
       return totalTime / invocationCount.get();
     }
     return 0;
-  }
-
-  /**
-   * Destroy pipeline on this datanode.
-   *
-   * @param dn         - Datanode on which pipeline needs to be destroyed
-   * @param pipelineID - ID of pipeline to be destroyed
-   * @param context    - Ozone datanode context
-   * @throws IOException
-   */
-  void destroyPipeline(DatanodeDetails dn, PipelineID pipelineID,
-      StateContext context) throws IOException {
-    final Configuration ozoneConf = context.getParent().getConf();
-    final String rpcType = ozoneConf
-        .get(ScmConfigKeys.DFS_CONTAINER_RATIS_RPC_TYPE_KEY,
-            ScmConfigKeys.DFS_CONTAINER_RATIS_RPC_TYPE_DEFAULT);
-    final RetryPolicy retryPolicy = RatisHelper.createRetryPolicy(ozoneConf);
-    final RaftPeer p = RatisHelper.toRaftPeer(dn);
-    final int maxOutstandingRequests =
-        HddsClientUtils.getMaxOutstandingRequests(ozoneConf);
-    final CertificateClient dnCertClient =
-        context.getParent().getCertificateClient();
-    final GrpcTlsConfig tlsConfig = RatisHelper.createTlsServerConfigForDN(
-        new SecurityConfig(ozoneConf), dnCertClient);
-    final TimeDuration requestTimeout =
-        RatisHelper.getClientRequestTimeout(ozoneConf);
-    try(RaftClient client = RatisHelper
-        .newRaftClient(SupportedRpcType.valueOfIgnoreCase(rpcType), p,
-            retryPolicy, maxOutstandingRequests, tlsConfig, requestTimeout)) {
-      client.groupRemove(RaftGroupId.valueOf(pipelineID.getId()),
-          true, p.getId());
-    }
   }
 }

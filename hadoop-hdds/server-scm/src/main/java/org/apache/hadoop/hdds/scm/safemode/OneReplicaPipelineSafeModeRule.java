@@ -26,6 +26,7 @@ import org.apache.hadoop.hdds.scm.events.SCMEvents;
 import org.apache.hadoop.hdds.scm.pipeline.Pipeline;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineID;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineManager;
+import org.apache.hadoop.hdds.scm.pipeline.SCMPipelineManager;
 import org.apache.hadoop.hdds.server.events.EventQueue;
 import org.apache.hadoop.hdds.server.events.TypedEvent;
 import org.slf4j.Logger;
@@ -47,7 +48,11 @@ public class OneReplicaPipelineSafeModeRule extends
 
   private int thresholdCount;
   private Set<PipelineID> reportedPipelineIDSet = new HashSet<>();
-  private int currentReportedPipelineCount = 0;
+  private Set<PipelineID> oldPipelineIDSet;
+  private int oldPipelineReportedCount = 0;
+  private int oldPipelineThresholdCount = 0;
+  private int newPipelineThresholdCount = 0;
+  private int newPipelineReportedCount = 0;
 
 
   public OneReplicaPipelineSafeModeRule(String ruleName, EventQueue eventQueue,
@@ -66,16 +71,19 @@ public class OneReplicaPipelineSafeModeRule extends
             HDDS_SCM_SAFEMODE_ONE_NODE_REPORTED_PIPELINE_PCT  +
             " value should be >= 0.0 and <= 1.0");
 
-    // Exclude CLOSED pipeline
+    oldPipelineIDSet =
+        ((SCMPipelineManager)pipelineManager).getOldPipelineIdSet();
     int totalPipelineCount =
         pipelineManager.getPipelines(HddsProtos.ReplicationType.RATIS,
-            HddsProtos.ReplicationFactor.THREE, Pipeline.PipelineState.OPEN)
-            .size() +
-            pipelineManager.getPipelines(HddsProtos.ReplicationType.RATIS,
-                HddsProtos.ReplicationFactor.THREE,
-                Pipeline.PipelineState.ALLOCATED).size();
+        HddsProtos.ReplicationFactor.THREE).size();
+    Preconditions.checkState(totalPipelineCount >= oldPipelineIDSet.size());
 
-    thresholdCount = (int) Math.ceil(percent * totalPipelineCount);
+    oldPipelineThresholdCount =
+        (int) Math.ceil(percent * oldPipelineIDSet.size());
+    newPipelineThresholdCount = (int) Math.ceil(
+        percent * (totalPipelineCount - oldPipelineIDSet.size()));
+
+    thresholdCount = oldPipelineThresholdCount + newPipelineThresholdCount;
 
     LOG.info("Total pipeline count is {}, pipeline's with at least one " +
         "datanode reported threshold count is {}", totalPipelineCount,
@@ -92,8 +100,7 @@ public class OneReplicaPipelineSafeModeRule extends
 
   @Override
   protected boolean validate() {
-    if (currentReportedPipelineCount >= thresholdCount) {
-      LOG.info("{} rule satisfied", this.getClass().getSimpleName());
+    if (newPipelineReportedCount + oldPipelineReportedCount >= thresholdCount) {
       return true;
     }
     return false;
@@ -105,19 +112,26 @@ public class OneReplicaPipelineSafeModeRule extends
     if (pipeline.getType() == HddsProtos.ReplicationType.RATIS &&
         pipeline.getFactor() == HddsProtos.ReplicationFactor.THREE &&
         !reportedPipelineIDSet.contains(pipeline.getId())) {
-      reportedPipelineIDSet.add(pipeline.getId());
-      getSafeModeMetrics()
-          .incCurrentHealthyPipelinesWithAtleastOneReplicaReportedCount();
+      if (oldPipelineIDSet.contains(pipeline.getId()) &&
+          oldPipelineReportedCount < oldPipelineThresholdCount) {
+        oldPipelineReportedCount++;
+        reportedPipelineIDSet.add(pipeline.getId());
+        getSafeModeMetrics()
+            .incCurrentHealthyPipelinesWithAtleastOneReplicaReportedCount();
+      } else if (newPipelineReportedCount < newPipelineThresholdCount) {
+        newPipelineReportedCount++;
+        reportedPipelineIDSet.add(pipeline.getId());
+        getSafeModeMetrics()
+            .incCurrentHealthyPipelinesWithAtleastOneReplicaReportedCount();
+      }
     }
-
-    currentReportedPipelineCount = reportedPipelineIDSet.size();
 
     if (scmInSafeMode()) {
       SCMSafeModeManager.getLogger().info(
           "SCM in safe mode. Pipelines with at least one datanode reported " +
               "count is {}, required at least one datanode reported per " +
               "pipeline count is {}",
-          currentReportedPipelineCount, thresholdCount);
+          newPipelineReportedCount + oldPipelineReportedCount, thresholdCount);
     }
   }
 
@@ -133,6 +147,6 @@ public class OneReplicaPipelineSafeModeRule extends
 
   @VisibleForTesting
   public int getCurrentReportedPipelineCount() {
-    return currentReportedPipelineCount;
+    return newPipelineReportedCount + oldPipelineReportedCount;
   }
 }

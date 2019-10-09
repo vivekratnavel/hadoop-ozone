@@ -96,7 +96,6 @@ public final class SCMPipelineMetrics implements MetricsSource {
   }
 
   void createPerPipelineMetrics(Pipeline pipeline) {
-    System.out.println("add pipeline " +  pipeline.getId() + " to metrics map");
     numBlocksAllocated.put(pipeline.getId(), new MutableCounterLong(Interns
         .info(getBlockAllocationMetricName(pipeline),
             "Number of blocks allocated in pipeline " + pipeline.getId()), 0L));

@@ -65,7 +65,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL;
 import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_HEARTBEAT_INTERVAL;
 import static org.apache.hadoop.hdds.protocol.proto.HddsProtos.NodeState
     .HEALTHY;
@@ -621,15 +620,10 @@ public class MiniOzoneClusterImpl implements MiniOzoneCluster {
       if (hbInterval.isPresent()) {
         conf.setTimeDuration(HDDS_HEARTBEAT_INTERVAL,
             hbInterval.get(), TimeUnit.MILLISECONDS);
-        conf.setTimeDuration(HDDS_COMMAND_STATUS_REPORT_INTERVAL,
-            hbInterval.get(), TimeUnit.MILLISECONDS);
-
       } else {
         conf.setTimeDuration(HDDS_HEARTBEAT_INTERVAL,
             DEFAULT_HB_INTERVAL_MS,
             TimeUnit.MILLISECONDS);
-        conf.setTimeDuration(HDDS_COMMAND_STATUS_REPORT_INTERVAL,
-            DEFAULT_HB_INTERVAL_MS, TimeUnit.MILLISECONDS);
       }
 
       if (hbProcessorInterval.isPresent()) {

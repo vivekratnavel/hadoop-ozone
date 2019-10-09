@@ -100,7 +100,7 @@ public final class SCMEvents {
           new TypedEvent<>(PipelineReportFromDatanode.class, "Pipeline_Report");
 
   /**
-   * Open pipeline event sent by ScmPipelineManager. This event is
+   * Open pipeline event sent by PipelineReportHandler. This event is
    * received by HealthyPipelineSafeModeRule.
    */
   public static final TypedEvent<Pipeline>
@@ -197,14 +197,6 @@ public final class SCMEvents {
 
   public static final TypedEvent<SafeModeStatus> SAFE_MODE_STATUS =
       new TypedEvent<>(SafeModeStatus.class);
-
-  /**
-   * This event is triggered by CommandStatusReportHandler whenever a
-   * status for CreatePipeline SCMCommand is received.
-   */
-  public static final TypedEvent<CreatePipelineStatus>
-      CREATE_PIPELINE_STATUS =
-      new TypedEvent<>(CreatePipelineStatus.class, "Create_Pipeline_Status");
 
   /**
    * Private Ctor. Never Constructed.

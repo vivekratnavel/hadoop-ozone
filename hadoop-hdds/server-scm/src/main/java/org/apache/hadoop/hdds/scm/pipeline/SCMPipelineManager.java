@@ -27,18 +27,11 @@ import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationType;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
-import org.apache.hadoop.hdds.protocol.proto
-    .StorageContainerDatanodeProtocolProtos.CreatePipelineACKProto;
-import org.apache.hadoop.hdds.protocol.proto
-    .StorageContainerDatanodeProtocolProtos.CommandStatus;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.events.SCMEvents;
 import org.apache.hadoop.hdds.scm.node.NodeManager;
-import org.apache.hadoop.hdds.scm.server.StorageContainerManager;
 import org.apache.hadoop.hdds.server.ServerUtils;
 import org.apache.hadoop.hdds.server.events.EventPublisher;
-import org.apache.hadoop.hdds.scm.command.CommandStatusReportHandler
-    .CreatePipelineStatus;
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.hdds.utils.MetadataKeyFilters;
@@ -52,6 +45,7 @@ import javax.management.ObjectName;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -88,14 +82,14 @@ public class SCMPipelineManager implements PipelineManager {
   private final NodeManager nodeManager;
   private final SCMPipelineMetrics metrics;
   private final Configuration conf;
-  private final StorageContainerManager scm;
   private boolean pipelineAvailabilityCheck;
   private boolean createPipelineInSafemode;
+  private Set<PipelineID> oldRatisThreeFactorPipelineIDSet = new HashSet<>();
   // Pipeline Manager MXBean
   private ObjectName pmInfoBean;
 
   public SCMPipelineManager(Configuration conf, NodeManager nodeManager,
-      EventPublisher eventPublisher, StorageContainerManager scm)
+      EventPublisher eventPublisher)
       throws IOException {
     this.lock = new ReentrantReadWriteLock();
     this.conf = conf;
@@ -122,7 +116,6 @@ public class SCMPipelineManager implements PipelineManager {
     this.metrics = SCMPipelineMetrics.create();
     this.pmInfoBean = MBeans.register("SCMPipelineManager",
         "SCMPipelineManagerInfo", this);
-    this.scm = scm;
     this.pipelineAvailabilityCheck = conf.getBoolean(
         HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_AVAILABILITY_CHECK,
         HddsConfigKeys.HDDS_SCM_SAFEMODE_PIPELINE_AVAILABILITY_CHECK_DEFAULT);
@@ -140,6 +133,10 @@ public class SCMPipelineManager implements PipelineManager {
   public void setPipelineProvider(ReplicationType replicationType,
                                   PipelineProvider provider) {
     pipelineFactory.setProvider(replicationType, provider);
+  }
+
+  public Set<PipelineID> getOldPipelineIdSet() {
+    return oldRatisThreeFactorPipelineIDSet;
   }
 
   private void initializePipelineState() throws IOException {
@@ -162,6 +159,10 @@ public class SCMPipelineManager implements PipelineManager {
       Preconditions.checkNotNull(pipeline);
       stateManager.addPipeline(pipeline);
       nodeManager.addPipeline(pipeline);
+      if (pipeline.getType() == ReplicationType.RATIS &&
+          pipeline.getFactor() == ReplicationFactor.THREE) {
+        oldRatisThreeFactorPipelineIDSet.add(pipeline.getId());
+      }
     }
   }
 
@@ -324,9 +325,8 @@ public class SCMPipelineManager implements PipelineManager {
     lock.writeLock().lock();
     try {
       Pipeline pipeline = stateManager.openPipeline(pipelineId);
-      if (pipelineAvailabilityCheck && scm != null && scm.isInSafeMode()) {
-        eventPublisher.fireEvent(SCMEvents.OPEN_PIPELINE, pipeline);
-      }
+      metrics.incNumPipelineCreated();
+      metrics.createPerPipelineMetrics(pipeline);
     } finally {
       lock.writeLock().unlock();
     }
@@ -493,64 +493,5 @@ public class SCMPipelineManager implements PipelineManager {
     }
     // shutdown pipeline provider.
     pipelineFactory.shutdown();
-  }
-
-  @Override
-  public void onMessage(CreatePipelineStatus response,
-      EventPublisher publisher) {
-    CommandStatus result = response.getCmdStatus();
-    CreatePipelineACKProto ack = result.getCreatePipelineAck();
-    PipelineID pipelineID = PipelineID.getFromProtobuf(ack.getPipelineID());
-    CommandStatus.Status status = result.getStatus();
-    LOG.info("receive pipeline {} create status {}", pipelineID, status);
-    Pipeline pipeline;
-    try {
-      pipeline = stateManager.getPipeline(pipelineID);
-    } catch (PipelineNotFoundException e) {
-      LOG.warn("Pipeline {} cannot be found", pipelineID);
-      return;
-    }
-
-    switch (status) {
-    case EXECUTED:
-      DatanodeDetails dn = nodeManager.getNodeByUuid(ack.getDatanodeUUID());
-      if (dn == null) {
-        LOG.warn("Datanode {} for Pipeline {} cannot be found",
-            ack.getDatanodeUUID(), pipelineID);
-        return;
-      }
-      try {
-        pipeline.reportDatanode(dn);
-      } catch (IOException e) {
-        LOG.warn("Update {} for Pipeline {} failed for {}",
-            dn.getUuidString(), pipelineID, e.getMessage());
-        return;
-      }
-      // If all datanodes are updated, we believe pipeline is ready to OPEN
-      if (pipeline.isHealthy() ||
-          pipeline.getPipelineState() == Pipeline.PipelineState.ALLOCATED) {
-        try {
-          openPipeline(pipelineID);
-        } catch (IOException e) {
-          LOG.warn("Fail to open Pipeline {} for {}", pipelineID,
-              e.getMessage());
-          return;
-        }
-        metrics.incNumPipelineCreated();
-        metrics.createPerPipelineMetrics(pipeline);
-      }
-      return;
-    case FAILED:
-      metrics.incNumPipelineCreationFailed();
-      try {
-        finalizeAndDestroyPipeline(pipeline, false);
-      } catch (IOException e) {
-        LOG.warn("Fail to close Pipeline {} for {}", pipelineID,
-            e.getMessage());
-      }
-      return;
-    default:
-      LOG.error("Unknown or unexpected status {}", status);
-    }
   }
 }

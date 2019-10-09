@@ -101,7 +101,6 @@ public class HealthyPipelineSafeModeRule
   @Override
   protected boolean validate() {
     if (currentHealthyPipelineCount >= healthyPipelineThresholdCount) {
-      LOG.info("{} rule satisfied", this.getClass().getSimpleName());
       return true;
     }
     return false;

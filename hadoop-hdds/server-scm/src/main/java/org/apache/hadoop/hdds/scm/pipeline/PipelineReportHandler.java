@@ -104,10 +104,9 @@ public class PipelineReportHandler implements
       if (pipeline.isHealthy()) {
         // if all the dns have reported, pipeline can be moved to OPEN state
         pipelineManager.openPipeline(pipelineID);
-      } else {
-        if (pipelineAvailabilityCheck && scmSafeModeManager.getInSafeMode()) {
-          publisher.fireEvent(SCMEvents.OPEN_PIPELINE, pipeline);
-        }
+      }
+      if (pipelineAvailabilityCheck && scmSafeModeManager.getInSafeMode()) {
+        publisher.fireEvent(SCMEvents.OPEN_PIPELINE, pipeline);
       }
     } else {
       // In OPEN state case just report the datanode
