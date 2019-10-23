@@ -4,7 +4,9 @@ jobs:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
-      - checkout
+      - checkout:
+          post:
+            git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh
       - persist_to_workspace:
           root: ./
@@ -14,9 +16,10 @@ jobs:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
-      - attach_workspace:
-          at: ./
-      - run: ./hadoop-ozone/dev-support/checks/checkstyle.sh
+      - checkout:
+          post:
+            git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
+      - run: ./hadoop-ozone/dev-support/checks/build.sh && ./hadoop-ozone/dev-support/checks/checkstyle.sh
   rat:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -70,9 +73,7 @@ workflows:
   ci_run:
     jobs:
       - build
-      - checkstyle:
-          requires:
-            - build
+      - checkstyle
       - rat
       - author
       - findbugs:
