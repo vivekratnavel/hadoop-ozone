@@ -47,7 +47,9 @@ jobs:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
-      - run: ./hadoop-ozone/dev-support/checks/integration.sh
+      - run:
+          command: ./hadoop-ozone/dev-support/checks/integration.sh
+          no_output_timeout: 20m
 workflows:
   version: 2
   ci_run:
