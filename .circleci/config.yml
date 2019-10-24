@@ -5,14 +5,14 @@ jobs:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
-      - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
+      # - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh
   checkstyle:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
-      - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
+      # - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh && ./hadoop-ozone/dev-support/checks/checkstyle.sh
       - store_artifacts:
           path: ./target/checkstyle/summary.txt
