@@ -17,6 +17,8 @@ jobs:
       - store_artifacts:
           path: ./target/checkstyle/summary.txt
           destination: checkstyle
+      - store_test_results:
+          path: ./target
   rat:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -49,6 +51,7 @@ jobs:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
+      - setup_remote_docker
       - run:
           name: Install Docker client
           command: |
