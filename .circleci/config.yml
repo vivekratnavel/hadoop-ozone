@@ -4,15 +4,15 @@ jobs:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
-      - checkout:
-          post: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
+      - checkout
+      - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh
   checkstyle:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
-      - checkout:
-          post: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
+      - checkout
+      - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh && ./hadoop-ozone/dev-support/checks/checkstyle.sh
       - store_artifacts:
           path: ./target/checkstyle/summary.txt
@@ -49,8 +49,6 @@ jobs:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
-      - setup_remote_docker:
-          docker_layer_caching: true
       - run:
           name: Install Docker client
           command: |
