@@ -20,9 +20,11 @@ BASE_DIR="$(pwd -P)"
 REPORT_DIR=${OUTPUT_DIR:-"$DIR/../../../target/checkstyle"}
 mkdir -p "$REPORT_DIR"
 REPORT_FILE="$REPORT_DIR/summary.txt"
+CHECKSTYLE_HEADER_FILE="checkstyle-header.txt"
 
 mvn -B -fn checkstyle:check
-if [[ $? -ne 0 ]]; then
+# Exit if there are build failures
+if [[ ! -s "${CHECKSTYLE_HEADER_FILE}" ]]; then
     exit 1
 fi
 

@@ -14,6 +14,9 @@ jobs:
       - checkout:
           post: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/checkstyle.sh
+      - store_artifacts:
+          path: ./target/checkstyle/summary.txt
+          destination: checkstyle
   rat:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
