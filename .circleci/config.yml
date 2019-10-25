@@ -71,7 +71,7 @@ jobs:
           command: |
             curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` > ~/docker-compose
             chmod +x ~/docker-compose
-            sudo mv ~/docker-compose /usr/local/bin/docker-compose
+            mv ~/docker-compose /usr/local/bin/docker-compose
       - run:
           name: Install Docker client
           command: |
@@ -79,7 +79,7 @@ jobs:
             VER="17.03.0-ce"
             curl -L -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz
             tar -xz -C /tmp -f /tmp/docker-$VER.tgz
-            sudo mv -f /tmp/docker/* /usr/bin
+            mv -f /tmp/docker/* /usr/bin
       - run: ./hadoop-ozone/dev-support/checks/acceptance.sh
       - store_artifacts:
          path: ./target/acceptance/summary.txt

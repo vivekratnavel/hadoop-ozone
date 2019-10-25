@@ -157,7 +157,8 @@ public class KeyManagerImpl implements KeyManager {
   public KeyManagerImpl(ScmBlockLocationProtocol scmBlockClient,
       OMMetadataManager metadataManager, OzoneConfiguration conf, String omId,
       OzoneBlockTokenSecretManager secretManager) {
-    this(null, new ScmClient(scmBlockClient, null), metadataManager, conf, omId, secretManager, null, null);
+    this(null, new ScmClient(scmBlockClient, null), metadataManager,
+        conf, omId, secretManager, null, null);
   }
 
   public KeyManagerImpl(OzoneManager om, ScmClient scmClient,

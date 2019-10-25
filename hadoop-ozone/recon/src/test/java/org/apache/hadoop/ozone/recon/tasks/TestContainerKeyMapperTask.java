@@ -163,7 +163,7 @@ public class TestContainerKeyMapperTask extends AbstractOMMetadataManagerTest {
     assertEquals(0, containerDbServiceProvider.getKeyCountForContainer(3L));
 
     // Test if container count is updated
-    assertEquals(2, containerDbServiceProvider.getCountForContainers());
+    assertEquals(0, containerDbServiceProvider.getCountForContainers());
   }
 
   @Test
