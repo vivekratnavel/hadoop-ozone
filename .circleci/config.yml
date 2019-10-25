@@ -17,8 +17,6 @@ jobs:
       - store_artifacts:
           path: ./target/checkstyle/summary.txt
           destination: checkstyle
-      - store_test_results:
-          path: ./target
   rat:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -40,12 +38,18 @@ jobs:
     steps:
       - checkout
       - run: ./hadoop-ozone/dev-support/checks/findbugs.sh
+      - store_artifacts:
+          path: ./target/findbugs/summary.txt
+          destination: findbugs
   unit:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
     steps:
       - checkout
       - run: ./hadoop-ozone/dev-support/checks/unit.sh
+      - store_artifacts:
+          path: ./target/unit/summary.txt
+          destination: unit
   acceptance:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -53,14 +57,23 @@ jobs:
       - checkout
       - setup_remote_docker
       - run:
+          name: Install Docker Compose
+          command: |
+            curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` > ~/docker-compose
+            chmod +x ~/docker-compose
+            sudo mv ~/docker-compose /usr/local/bin/docker-compose
+      - run:
           name: Install Docker client
           command: |
             set -x
             VER="17.03.0-ce"
             curl -L -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz
             tar -xz -C /tmp -f /tmp/docker-$VER.tgz
-            mv /tmp/docker/* /usr/bin
+            sudo mv -f /tmp/docker/* /usr/bin
       - run: ./hadoop-ozone/dev-support/checks/acceptance.sh
+      - store_artifacts:
+         path: ./target/acceptance/summary.txt
+         destination: acceptance
   integration:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -69,6 +82,9 @@ jobs:
       - run:
           command: ./hadoop-ozone/dev-support/checks/integration.sh
           no_output_timeout: 20m
+      - store_artifacts:
+          path: ./target/integration/summary.txt
+          destination: integration
 workflows:
   version: 2
   ci_run:
