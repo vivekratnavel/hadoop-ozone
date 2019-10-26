@@ -4,7 +4,6 @@ services:
 before_install:
   - docker --version
   - docker pull vivekratnavel/hadoop-ozone-build:v1
-  - docker run --name ozone-build -d vivekratnavel/hadoop-ozone-build:v1 -v .:/home/user /bin/bash
   - docker ps -a
 script:
-  - docker exec -it ozone-build bash -c "cd /home/user && ./hadoop-ozone/dev-support/checks/integration.sh"
+  - docker run vivekratnavel/hadoop-ozone-build:v1 -v .:/home/user /bin/sh -c "cd /home/user && ./hadoop-ozone/dev-support/checks/integration.sh"
