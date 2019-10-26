@@ -1,28 +1,10 @@
-env:
-  global:
-    - DOCKER_COMPOSE_VERSION=1.24.1
-    - PROTOC_ZIP=protobuf-2.5.0.tar.gz
 sudo: false
-cache:
-  directories:
-    - $HOME/.m2
 services:
   - docker
-before_script:
+before_install:
   - docker --version
-  - wget https://github.com/google/protobuf/releases/download/v2.5.0/$PROTOC_ZIP
-  - tar xvf $PROTOC_ZIP
-  - rm -f $PROTOC_ZIP
-  - cd protobuf-2.5.0
-  - ./autogen.sh
-  - ./configure --prefix=/usr
-  - make
-  - make install
-  - protoc --version
-  - sudo rm /usr/local/bin/docker-compose
-  - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-  - chmod +x docker-compose
-  - sudo mv docker-compose /usr/local/bin
-  - docker-compose --version
+  - docker pull vivekratnavel/hadoop-ozone-build:v1
+  - docker run --name ozone-build -d vivekratnavel/hadoop-ozone-build:v1 -v .:/home/user
+  - docker ps -a
 script:
-  - ./hadoop-ozone/dev-support/checks/integration.sh
+  - docker exec -it ozone-build bash -c "cd /home/user && ./hadoop-ozone/dev-support/checks/integration.sh"
