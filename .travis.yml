@@ -6,4 +6,4 @@ before_install:
   - docker pull vivekratnavel/hadoop-ozone-build:v1
   - docker ps -a
 script:
-  - docker run vivekratnavel/hadoop-ozone-build:v1 -v .:/home/user /bin/sh -c "cd /home/user && ./hadoop-ozone/dev-support/checks/integration.sh"
+  - docker run -it --mount type=bind,src=$TRAVIS_BUILD_DIR,dst=/home/user vivekratnavel/hadoop-ozone-build:v1 /bin/bash -c "cd /home/user && ./hadoop-ozone/dev-support/checks/integration.sh"
