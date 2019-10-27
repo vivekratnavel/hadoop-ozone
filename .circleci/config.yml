@@ -5,9 +5,9 @@ jobs:
       - image: vivekratnavel/hadoop-ozone-build:v1
     working_directory: ~/circleci-ozone
     steps:
+      - checkout
       - attach_workspace:
           at: ~/circleci-ozone
-      - checkout
       - run:
           name: post checkout check
           command: |
@@ -25,7 +25,7 @@ jobs:
     steps:
       - checkout
       # - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
-      - run: ./hadoop-ozone/dev-support/checks/build.sh && ./hadoop-ozone/dev-support/checks/checkstyle.sh
+      - run: ./hadoop-ozone/dev-support/checks/checkstyle.sh
       - store_artifacts:
           path: ./target/checkstyle/summary.txt
           destination: checkstyle
@@ -77,15 +77,15 @@ jobs:
       image: circleci/classic:latest
     working_directory: ~/circleci-ozone
     steps:
+      - checkout
       - attach_workspace:
           at: ~/circleci-ozone
-      - checkout
       - run:
           name: post checkout check
           command: |
             echo $PWD
             ls -aslh .
-            ls -aslh ~/circleci-ozone
+            ls -aslh ~/circleci-ozone/hadoop-ozone/dist/target
       - run: ./hadoop-ozone/dev-support/checks/acceptance.sh
       - store_artifacts:
          path: ./target/acceptance/summary.txt
@@ -106,7 +106,9 @@ workflows:
   ci_run:
     jobs:
       - build
-      - checkstyle
+      - checkstyle:
+          - requires:
+              - build
       - rat
       - author
       - findbugs:
