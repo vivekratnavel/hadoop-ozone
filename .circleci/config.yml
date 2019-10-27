@@ -61,8 +61,8 @@ jobs:
           path: ./target/unit/summary.txt
           destination: unit
   acceptance:
-    docker:
-      - image: vivekratnavel/hadoop-ozone-build:v1
+    machine:
+      image: ubuntu-1604:201903-01
     steps:
       - checkout
       - setup_remote_docker
@@ -112,9 +112,4 @@ workflows:
       - unit:
           requires:
             - build
-      - acceptance:
-          requires:
-            - unit
-      - integration:
-          requires:
-            - unit
+      - acceptance
