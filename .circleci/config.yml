@@ -3,10 +3,22 @@ jobs:
   build:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
+    working_directory: ~/circleci-ozone
     steps:
+      - attach_workspace:
+          at: ~/circleci-ozone
       - checkout
+      - run:
+          name: post checkout check
+          command: |
+            echo $PWD
+            ls -aslh .
+            ls -aslh ~/circleci-ozone
       # - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/build.sh
+      - persist_to_workspace:
+          root: .
+          paths: hadoop-ozone/dist/target
   checkstyle:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
@@ -63,8 +75,17 @@ jobs:
   acceptance:
     machine:
       image: circleci/classic:latest
+    working_directory: ~/circleci-ozone
     steps:
+      - attach_workspace:
+          at: ~/circleci-ozone
       - checkout
+      - run:
+          name: post checkout check
+          command: |
+            echo $PWD
+            ls -aslh .
+            ls -aslh ~/circleci-ozone
       - run: ./hadoop-ozone/dev-support/checks/acceptance.sh
       - store_artifacts:
          path: ./target/acceptance/summary.txt
@@ -94,4 +115,6 @@ workflows:
       - unit:
           requires:
             - build
-      - acceptance
+      - acceptance:
+          requires:
+            - build
