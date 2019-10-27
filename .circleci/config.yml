@@ -18,12 +18,15 @@ jobs:
       - run: ./hadoop-ozone/dev-support/checks/build.sh
       - persist_to_workspace:
           root: .
-          paths: hadoop-ozone/dist/target
+          paths: hadoop-ozone/dist/target/*
   checkstyle:
     docker:
       - image: vivekratnavel/hadoop-ozone-build:v1
+    working_directory: ~/circleci-ozone
     steps:
       - checkout
+      - attach_workspace:
+          at: ~/circleci-ozone
       # - run: git pull --ff-only origin "refs/pull/${CI_PULL_REQUEST//*pull\//}/merge"
       - run: ./hadoop-ozone/dev-support/checks/checkstyle.sh
       - store_artifacts:
@@ -107,8 +110,8 @@ workflows:
     jobs:
       - build
       - checkstyle:
-          - requires:
-              - build
+          requires:
+            - build
       - rat
       - author
       - findbugs:
