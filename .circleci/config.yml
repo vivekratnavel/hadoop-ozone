@@ -84,9 +84,18 @@ jobs:
       - attach_workspace:
           at: ~/circleci-ozone
       - run:
+          name: Install docker compose
+          command: |
+            docker-compose -version
+            sudo apt install curl
+            sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+      - run:
           name: post checkout check
           command: |
             echo $PWD
+            docker --version
+            docker-compose -version
             ls -aslh .
             ls -aslh ~/circleci-ozone/hadoop-ozone/dist/target
       - run: ./hadoop-ozone/dev-support/checks/acceptance.sh
