@@ -225,7 +225,6 @@ jobs:
     runs-on: ubuntu-18.04
     needs:
        - it-ozone
-       - it-hdds-om
        - it-client
        - it-filesystem-contract
        - it-filesystem
