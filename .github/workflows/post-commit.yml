@@ -184,24 +184,24 @@ jobs:
           with:
             name: it-client
             path: mnt/ozone/target/integration
-  it-hdds-om:
-    name: it-hdds-om
-    runs-on: ubuntu-18.04
-    needs:
-        - build
-    steps:
-        - run: sudo mkdir mnt && sudo mount --bind /mnt `pwd`/mnt && sudo chmod 777 mnt
-        - uses: actions/checkout@master
-          with:
-            path: mnt/ozone
-        - uses: ./mnt/ozone/.github/buildenv
-          with:
-             args: ./mnt/ozone/hadoop-ozone/dev-support/checks/integration.sh -Phdds-om
-        - uses: actions/upload-artifact@master
-          if: always()
-          with:
-            name: it-hdds-om
-            path: mnt/ozone/target/integration
+#  it-hdds-om:
+#    name: it-hdds-om
+#    runs-on: ubuntu-18.04
+#    needs:
+#        - build
+#    steps:
+#        - run: sudo mkdir mnt && sudo mount --bind /mnt `pwd`/mnt && sudo chmod 777 mnt
+#        - uses: actions/checkout@master
+#          with:
+#            path: mnt/ozone
+#        - uses: ./mnt/ozone/.github/buildenv
+#          with:
+#             args: ./mnt/ozone/hadoop-ozone/dev-support/checks/integration.sh -Phdds-om
+#        - uses: actions/upload-artifact@master
+#          if: always()
+#          with:
+#            name: it-hdds-om
+#            path: mnt/ozone/target/integration
   it-ozone:
     name: it-ozone
     runs-on: ubuntu-18.04
@@ -250,7 +250,6 @@ jobs:
        - name: Upload coverage to Codecov
          uses: codecov/codecov-action@v1
          with:
-           token: ${{ secrets.CODECOV_TOKEN }}
            file: ./target/coverage/all.xml
            name: codecov-umbrella
            fail_ci_if_error: true
